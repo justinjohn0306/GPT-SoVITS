@@ -3,7 +3,6 @@ scipy
 tensorboard
 librosa==0.10.2
 numba
-gradio<5
 ffmpeg-python
 tqdm
 cn2an
