@@ -1,6 +1,6 @@
 js = """
 function deleteTheme() {
-    
+
 const params = new URLSearchParams(window.location.search);
 if (params.has('__theme')) {
     params.delete('__theme');
@@ -52,12 +52,15 @@ footer * {
 top_html = """
 <div align="center">
     <div style="margin-bottom: 5px; font-size: 15px;">{}</div>
-    <div style="display: flex; gap: 80px; justify-content: center;">
+    <div style="display: flex; gap: 60px; justify-content: center;">
         <a href="https://github.com/RVC-Boss/GPT-SoVITS" target="_blank">
             <img src="https://img.shields.io/badge/GitHub-GPT--SoVITS-blue.svg?style=for-the-badge&logo=github" style="width: auto; height: 30px;">
         </a>
         <a href="https://www.yuque.com/baicaigongchang1145haoyuangong/ib3g1e" target="_blank">
             <img src="https://img.shields.io/badge/简体中文-阅读文档-blue?style=for-the-badge&logo=googledocs&logoColor=white" style="width: auto; height: 30px;">
+        </a>
+        <a href="https://github.com/RVC-Boss/GPT-SoVITS" target="_blank">
+            <img src="https://img.shields.io/badge/免费在线体验-free_online_demo-yellow.svg?style=for-the-badge&logo=huggingface" style="width: auto; height: 30px;">
         </a>
         <a href="https://www.yuque.com/baicaigongchang1145haoyuangong/ib3g1e" target="_blank">
             <img src="https://img.shields.io/badge/English-READ%20DOCS-blue?style=for-the-badge&logo=googledocs&logoColor=white" style="width: auto; height: 30px;">

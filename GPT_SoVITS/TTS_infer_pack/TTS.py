@@ -305,7 +305,7 @@ class TTS_Config:
 
         assert isinstance(configs, dict)
         version = configs.get("version", "v2").lower()
-        assert version in ["v1", "v2", "v3", "v4", "v2Pro", "v2ProPlus"]
+        assert version in ["v1", "v2", "v3", "v4", "v2pro", "v2proplus"]
         self.default_configs[version] = configs.get(version, self.default_configs[version])
         self.configs: dict = configs.get("custom", deepcopy(self.default_configs[version]))
 
