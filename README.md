@@ -1,3 +1,8 @@
+
+Colab Notebooks (Paid): https://www.patreon.com/posts/gpt-sovits-paid-147615558?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
+
+
+
 <div align="center">
 
 <h1>GPT-SoVITS-WebUI</h1>
