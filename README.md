@@ -1,5 +1,5 @@
 
-Colab Notebooks (Paid): https://www.patreon.com/posts/gpt-sovits-paid-147615558?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
+[Colab Notebooks (Paid)](https://www.patreon.com/posts/147615558)
 
 
 
