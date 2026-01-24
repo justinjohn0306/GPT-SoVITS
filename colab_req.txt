@@ -24,6 +24,7 @@ opencc==1.1.9
 python_mecab_ko; sys_platform != 'win32'
 fastapi[standard]>=0.115.2
 x_transformers
+torchcodec==0.9.1
 torchmetrics<=1.5
 pydantic<=2.10.6
 ctranslate2>=4.0,<5
