@@ -1,7 +1,15 @@
 
-[Colab Notebooks (Paid)](https://www.patreon.com/posts/147615558)
+## 🚀 Google Colab
 
+Use the notebooks below to train and run GPT-SoVITS directly in Google Colab.
 
+[![Training Notebook](https://img.shields.io/badge/Colab-Training-F9AB00?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1qW6hnTQdcb5vCl2AGndrB_pB6l7Fip2t)
+
+Train a GPT-SoVITS model from your own dataset.
+
+[![Inference Notebook](https://img.shields.io/badge/Colab-Inference-F9AB00?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1p2Tk7n5xJbMPJ_i1VosgC8ACvwahPwrd)
+
+Generate speech using your trained model.
 
 <div align="center">
 
