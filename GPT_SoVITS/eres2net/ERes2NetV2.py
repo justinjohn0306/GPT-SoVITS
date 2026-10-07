@@ -259,14 +259,3 @@ class ERes2NetV2(nn.Module):
         #     return embed_b
         # else:
         #     return embed_a
-
-
-if __name__ == "__main__":
-    x = torch.randn(1, 300, 80)
-    model = ERes2NetV2(feat_dim=80, embedding_size=192, m_channels=64, baseWidth=26, scale=2, expansion=2)
-    model.eval()
-    y = model(x)
-    print(y.size())
-    macs, num_params = profile(model, inputs=(x,))
-    print("Params: {} M".format(num_params / 1e6))  # 17.86 M
-    print("MACs: {} G".format(macs / 1e9))  # 12.69 G

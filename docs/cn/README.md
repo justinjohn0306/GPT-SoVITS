@@ -34,7 +34,7 @@
 
 3. **跨语言支持:** 支持与训练数据集不同语言的推理, 目前支持英语、日语、韩语、粤语和中文.
 
-4. **WebUI 工具:** 集成工具包括声音伴奏分离、自动训练集分割、中文自动语音识别(ASR)和文本标注, 协助初学者创建训练数据集和 GPT/SoVITS 模型.
+4. **WebUI 工具:** 集成工具包括声音伴奏分离、自动训练集分割、使用 [Fun-ASR-Nano](https://github.com/FunAudioLLM/Fun-ASR)、[SenseVoice](https://github.com/FunAudioLLM/SenseVoice) 和经典 [FunASR](https://github.com/modelscope/FunASR) 的多语种自动语音识别 (ASR), 以及文本标注, 协助初学者创建训练数据集和 GPT/SoVITS 模型.
 
 **查看我们的介绍视频 [demo video](https://www.bilibili.com/video/BV12g4y1m7Uw)**
 
@@ -198,7 +198,7 @@ docker exec -it <GPT-SoVITS-CU126-Lite|GPT-SoVITS-CU128-Lite|GPT-SoVITS-CU126|GP
 
    - 建议在模型名称和配置文件名中**直接指定模型类型**, 例如`mel_mand_roformer`、`bs_roformer`.如果未指定, 将从配置文中比对特征, 以确定它是哪种类型的模型.例如, 模型`bs_roformer_ep_368_sdr_12.9628.ckpt` 和对应的配置文件`bs_roformer_ep_368_sdr_12.9628.yaml` 是一对.`kim_mel_band_roformer.ckpt` 和 `kim_mel_band_roformer.yaml` 也是一对.
 
-4. 对于中文 ASR (额外功能), 从 [Damo ASR Model](https://modelscope.cn/models/damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/files)、[Damo VAD Model](https://modelscope.cn/models/damo/speech_fsmn_vad_zh-cn-16k-common-pytorch/files) 和 [Damo Punc Model](https://modelscope.cn/models/damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch/files) 下载模型, 并将它们放置在 `tools/asr/models` 目录中.
+4. FunASR 模型会在首次使用时自动下载. WebUI 提供适合多语种和方言识别的 [Fun-ASR-Nano](https://github.com/FunAudioLLM/Fun-ASR)、适合快速转写的 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice), 以及通过 [FunASR](https://github.com/modelscope/FunASR) 使用的经典 Paraformer/UniASR 中文和粤语模型. 如需离线预置经典中文模型, 请将 [ASR 模型](https://modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/files)、[VAD 模型](https://modelscope.cn/models/iic/speech_fsmn_vad_zh-cn-16k-common-pytorch/files) 和 [标点模型](https://modelscope.cn/models/iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch/files) 下载到 `tools/asr/models`.
 
 5. 对于英语或日语 ASR (额外功能), 从 [Faster Whisper Large V3](https://huggingface.co/Systran/faster-whisper-large-v3) 下载模型, 并将其放置在 `tools/asr/models` 目录中.此外, [其他模型](https://huggingface.co/Systran) 可能具有类似效果且占用更少的磁盘空间.
 
@@ -354,6 +354,22 @@ python webui.py
 
 3. 从 [huggingface](https://huggingface.co/lj1995/GPT-SoVITS/tree/main) 下载 V2Pro 预训练模型 (`v2Pro/s2Dv2Pro.pth`, `v2Pro/s2Gv2Pro.pth`, `v2Pro/s2Dv2ProPlus.pth`, `v2Pro/s2Gv2ProPlus.pth`, 和 `sv/pretrained_eres2netv2w24s4ep4.ckpt`), 并放入 `GPT_SoVITS/pretrained_models` 目录.
 
+## V5 更新说明
+
+新特性：
+
+1. 大幅提升无需 SoVITS 微调训练时的音色相似度.
+
+2. 更新新版 vocoder, 大幅降低高频镜像混叠伪影.
+
+3. 支持 `cuda_graph` 和 `flash_attention` 推理加速, 感谢 [@XXXXRT666](https://github.com/XXXXRT666) 的贡献.
+
+从 V2Pro 更新到 V5：
+
+1. 从 [GitHub](https://github.com/RVC-Boss/GPT-SoVITS/tree/cuda_graph_accel_v5) 克隆最新代码.
+
+2. 从 [Hugging Face](https://huggingface.co/lj1995/GPT-SoVITS/tree/main/gsv-v5-pretrained) 下载 V5 预训练模型, 并放入 `GPT_SoVITS/pretrained_models` 目录, 保留 `gsv-v5-pretrained` 子目录结构, 即模型目录为 `GPT_SoVITS/pretrained_models/gsv-v5-pretrained`.
+
 ## 待办事项清单
 
 - [x] **高优先级:**
@@ -399,13 +415,13 @@ python audio_slicer.py \
     --hop_size <step_size_for_computing_volume_curve>
 ```
 
-这是使用命令行完成数据集 ASR 处理的方式 (仅限中文)
+使用 FunASR 命令行完成数据集 ASR 处理. 中文、英语、日语、韩语和自动语言检测默认使用 Fun-ASR-Nano, 粤语继续使用经典 FunASR 后端.
 
 ```bash
-python tools/asr/funasr_asr.py -i <input> -o <output>
+python tools/asr/funasr_asr.py -i <input> -o <output> -l zh
 ```
 
-通过 Faster_Whisper 进行 ASR 处理 (除中文之外的 ASR 标记)
+也可以使用 Faster Whisper 作为 ASR 后端.
 
 (没有进度条, GPU 性能可能会导致时间延迟)
 
@@ -454,7 +470,9 @@ python ./tools/asr/fasterwhisper_asr.py -i <input> -o <output> -l <language> -p 
 - [FFmpeg](https://github.com/FFmpeg/FFmpeg)
 - [gradio](https://github.com/gradio-app/gradio)
 - [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
-- [FunASR](https://github.com/alibaba-damo-academy/FunASR)
+- [FunASR](https://github.com/modelscope/FunASR)
+- [Fun-ASR](https://github.com/FunAudioLLM/Fun-ASR)
+- [SenseVoice](https://github.com/FunAudioLLM/SenseVoice)
 - [AP-BWE](https://github.com/yxlu-0102/AP-BWE)
 
 感谢 @Naozumi520 提供粤语训练集, 并在粤语相关知识方面给予指导.
