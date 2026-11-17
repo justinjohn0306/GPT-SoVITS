@@ -100,8 +100,8 @@ cnhubert.cnhubert_base_path = cnhubert_base_path
 import random
 
 from tools.acceleration import create_acceleration, cuda_graph_available, flash_attention_available
-from module.models import Generator, SynthesizerTrn, SynthesizerTrnV3
-from module.models_v5 import synthesize_v5_mel, V5_VERSIONS
+from module.models import CFM, Generator, SynthesizerTrn, SynthesizerTrnV3
+from module.models_v5 import V5_VERSIONS
 
 
 def set_seed(seed):
@@ -283,14 +283,14 @@ def change_sovits_weights(sovits_path, prompt_language=None, text_language=None)
             {
                 "__type__": "update",
                 "visible": visible_sample_steps,
-                "value": (4 if model_version == "v5turbo" else 32 if model_version in {"v3", "v5dev"} else 8),
+                "value": (32 if model_version == "v3" else 8),
                 "choices": [4, 8, 16, 32],
             },
             {"__type__": "update", "visible": visible_inp_refs},
             {"__type__": "update", "value": False, "interactive": True if model_version not in v3v4set else False},
             {"__type__": "update", "visible": True if model_version == "v3" else False},
             {"__type__": "update", "value": i18n("模型加载中，请等待"), "interactive": False},
-            {"__type__": "update", "visible": model_version in V5_VERSIONS, "value": (1.30 if model_version == "v5dev" else 0.0)},
+            {"__type__": "update", "visible": False, "value": 0.0, "interactive": False},
         )
 
     dict_s2 = load_sovits_new(sovits_path)
@@ -355,6 +355,10 @@ def change_sovits_weights(sovits_path, prompt_language=None, text_language=None)
         # torch.save(vq_model.state_dict(),"merge_win.pth")
         vq_model.eval()
 
+    if model_version in V5_VERSIONS:
+        vq_model.cfm.noise_temperature = None
+        vq_model.cfm.use_static_cache = False
+
     yield (
         {"__type__": "update", "choices": list(dict_language.keys())},
         {"__type__": "update", "choices": list(dict_language.keys())},
@@ -365,14 +369,14 @@ def change_sovits_weights(sovits_path, prompt_language=None, text_language=None)
         {
             "__type__": "update",
             "visible": visible_sample_steps,
-            "value": (4 if model_version == "v5turbo" else 32 if model_version in {"v3", "v5dev"} else 8),
+            "value": (32 if model_version == "v3" else 8),
             "choices": [4, 8, 16, 32],
         },
         {"__type__": "update", "visible": visible_inp_refs},
         {"__type__": "update", "value": False, "interactive": True if model_version not in v3v4set else False},
         {"__type__": "update", "visible": True if model_version == "v3" else False},
         {"__type__": "update", "value": i18n("合成语音"), "interactive": True},
-        {"__type__": "update", "visible": model_version in V5_VERSIONS, "value": (1.30 if model_version == "v5dev" else 0.0)},
+        {"__type__": "update", "visible": False, "value": 0.0, "interactive": False},
     )
     with open("./weight.json") as f:
         data = f.read()
@@ -492,13 +496,12 @@ def init_hifigan():
     hifigan_model.eval()
     hifigan_model.remove_weight_norm()
     state_dict_g = torch.load(
-        "%s/GPT_SoVITS/pretrained_models/gsv-%s-pretrained/vocoder.pth" %
-        (now_dir, "v5" if model_version in V5_VERSIONS else model_version),
+        "%s/GPT_SoVITS/pretrained_models/gsv-v4-pretrained/vocoder.pth" % (now_dir,),
         map_location="cpu",
         weights_only=False,
     )
     print("loading vocoder", hifigan_model.load_state_dict(state_dict_g))
-    hifigan_version = model_version
+    hifigan_version = "v4"
     clean_bigvgan_model()
     clean_sv_cn_model()
     if is_half == True:
@@ -841,6 +844,36 @@ def audio_sr(audio, sr):
 # cache_tokens={}#暂未实现清理机制
 cache = {}
 
+# cache-dit (DBCache) for the DiT sampler: off by default. The UI writes here, get_tts_wav
+# reads it; the GSV_DBCACHE* environment variables work as well.
+CACHE_DIT = {"cache_dit": "off", "dbcache_fn": None, "dbcache_threshold": 0.02,
+             "dbcache_warmup": 8, "dbcache_downsample": 4}
+
+
+def update_cache_dit(mode, fn, thr, warmup, ds):
+    CACHE_DIT["cache_dit"] = str(mode or "off")
+    CACHE_DIT["dbcache_fn"] = None if fn in (None, "") or int(fn) < 0 else int(fn)
+    CACHE_DIT["dbcache_threshold"] = float(thr) if thr not in (None, "") else 0.02
+    CACHE_DIT["dbcache_warmup"] = int(warmup) if warmup not in (None, "") else 8
+    CACHE_DIT["dbcache_downsample"] = int(ds) if ds not in (None, "") else 4
+
+
+def apply_cache_dit(vq_model, sample_steps, params=None):
+    """cache-dit (DBCache) switch; off unless configured (UI or GSV_DBCACHE* env)."""
+    cfm = getattr(vq_model, "cfm", None)
+    if cfm is None or not hasattr(cfm, "set_dbcache"):
+        return None
+    from module.cache_dit import config_from_params
+
+    cfg = config_from_params(dict(params if params is not None else CACHE_DIT),
+                             int(sample_steps), getattr(cfm, "cache_depth", 0) or None)
+    if cfg.enabled and str(getattr(vq_model, "version", "")) == "v5turbo" and not cfg.force:
+        cfg.fn = 0  # 4-step turbo: no gain and unstable quality, keep it off
+    cfm.set_dbcache(cfg)
+    if cfg.enabled:
+        print("cache-dit:", cfg)
+    return cfg
+
 
 def get_tts_wav(
     ref_wav_path,
@@ -865,10 +898,11 @@ def get_tts_wav(
 ):
     global cache, t2s_model_cudagraph
     if sample_steps is None:
-        sample_steps = 4 if model_version == "v5turbo" else 32 if model_version in {"v3", "v5dev"} else 8
+        sample_steps = 32 if model_version == "v3" else 8
     if cfg_rate is None:
-        cfg_rate = 1.30 if model_version == "v5dev" else 0.0
+        cfg_rate = 0.0
     sample_steps, cfg_rate = int(sample_steps), float(cfg_rate)
+    apply_cache_dit(globals().get("vq_model"), sample_steps)
     if ref_wav_path:
         pass
     else:
@@ -1081,30 +1115,27 @@ def get_tts_wav(
             fea_todo, ge = vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
             cfm_resss = []
             idx = 0
-            if model_version in V5_VERSIONS:
-                cfm_res = synthesize_v5_mel(vq_model, fea_ref, fea_todo, mel2, sample_steps, cfg_rate)
-                cfm_res = cfm_res.to(fea_todo.dtype)
-            else:
-                while 1:
-                    fea_todo_chunk = fea_todo[:, :, idx : idx + chunk_len]
-                    if fea_todo_chunk.shape[-1] == 0:
-                        break
-                    idx += chunk_len
-                    fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
-                    cfm_res = vq_model.cfm.inference(
-                        fea, torch.LongTensor([fea.size(1)]).to(fea.device), mel2, sample_steps, inference_cfg_rate=0
-                    )
-                    cfm_res = cfm_res[:, :, mel2.shape[2] :]
-                    mel2 = cfm_res[:, :, -T_min:]
-                    fea_ref = fea_todo_chunk[:, :, -T_min:]
-                    cfm_resss.append(cfm_res)
-                cfm_res = torch.cat(cfm_resss, 2)
+            while 1:
+                fea_todo_chunk = fea_todo[:, :, idx : idx + chunk_len]
+                if fea_todo_chunk.shape[-1] == 0:
+                    break
+                idx += chunk_len
+                fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
+                cfm_res = CFM.inference(
+                    vq_model.cfm, fea, torch.LongTensor([fea.size(1)]).to(fea.device), mel2, sample_steps,
+                    temperature=1.0, inference_cfg_rate=0,
+                )
+                cfm_res = cfm_res[:, :, mel2.shape[2] :]
+                mel2 = cfm_res[:, :, -T_min:]
+                fea_ref = fea_todo_chunk[:, :, -T_min:]
+                cfm_resss.append(cfm_res)
+            cfm_res = torch.cat(cfm_resss, 2)
             cfm_res = denorm_spec(cfm_res)
             if model_version == "v3":
                 if bigvgan_model == None:
                     init_bigvgan()
             else:  # v4
-                if hifigan_model is None or hifigan_version != model_version:
+                if hifigan_model is None or hifigan_version != "v4":
                     init_hifigan()
             vocoder_model = bigvgan_model if model_version == "v3" else hifigan_model
             with torch.inference_mode():
@@ -1299,7 +1330,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
             with gr.Column(scale=13):
                 ref_text_free = gr.Checkbox(
                     label=i18n("开启无参考文本模式。不填参考文本亦相当于开启。")
-                    + i18n("v3暂不支持该模式，使用了会报错。"),
+                    + i18n("v3、v4、v5 均不支持无参考文本模式，请填写参考文本！"),
                     value=False,
                     interactive=True if model_version not in v3v4set else False,
                     show_label=True,
@@ -1322,8 +1353,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
                     )
                     cfg_rate = gr.Slider(
                         minimum=0, maximum=2, step=0.05,
-                        value=(1.30 if model_version == "v5dev" else 0.0), label="CFG",
-                        visible=model_version in V5_VERSIONS, interactive=True, scale=1,
+                        value=0.0, label="CFG",
+                        visible=False, interactive=False, scale=1,
                     )
                 inp_refs = (
                     gr.File(
@@ -1344,7 +1375,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
                 sample_steps = (
                     gr.Radio(
                         label=i18n("采样步数,如果觉得电,提高试试,如果觉得慢,降低试试"),
-                        value=(4 if model_version == "v5turbo" else 32 if model_version in {"v3", "v5dev"} else 8),
+                        value=(32 if model_version == "v3" else 8),
                         choices=[4, 8, 16, 32],
                         visible=True,
                     )
@@ -1353,9 +1384,29 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
                         label=i18n("采样步数,如果觉得电,提高试试,如果觉得慢,降低试试"),
                         choices=[4, 8, 16, 32],
                         visible=False,
-                        value=(4 if model_version == "v5turbo" else 32 if model_version in {"v3", "v5dev"} else 8),
+                        value=(32 if model_version == "v3" else 8),
                     )
                 )
+                with gr.Accordion(i18n("DiT 加速 cache-dit（默认关闭）"), open=False):
+                    with gr.Row():
+                        cache_dit_mode = gr.Dropdown(
+                            label=i18n("cache-dit"),
+                            choices=["off", "auto", "f4", "f8", "f16"],
+                            value="off", scale=2,
+                        )
+                        dbcache_fn = gr.Number(label="fn", value=-1, precision=0, scale=1)
+                        dbcache_threshold = gr.Number(label="thr", value=0.02, scale=1)
+                        dbcache_warmup = gr.Number(label="warmup", value=8, precision=0, scale=1)
+                        dbcache_downsample = gr.Number(label="ds", value=4, precision=0, scale=1)
+                    gr.Markdown(i18n("DBCache：只算前 fn 个 block，残差变化小于 thr 时跳过中间 block。"
+                                     "fn=-1 表示跟随模式（auto = 步数>=16 时 F8）。4 步的 v5turbo 不支持。"))
+                    for _cd in (cache_dit_mode, dbcache_fn, dbcache_threshold,
+                                dbcache_warmup, dbcache_downsample):
+                        _cd.change(
+                            update_cache_dit,
+                            [cache_dit_mode, dbcache_fn, dbcache_threshold,
+                             dbcache_warmup, dbcache_downsample],
+                        )
                 if_sr_Checkbox = gr.Checkbox(
                     label=i18n("v3输出如果觉得闷可以试试开超分"),
                     value=False,
