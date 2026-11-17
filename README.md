@@ -3,11 +3,11 @@
 
 Use the notebooks below to train and run GPT-SoVITS directly in Google Colab.
 
-[![Training Notebook](https://img.shields.io/badge/Colab-Training-F9AB00?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1qW6hnTQdcb5vCl2AGndrB_pB6l7Fip2t)
+[![Training Notebook](https://img.shields.io/badge/Colab-Training-F9AB00?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1l1k7Q2uRLDYTKWKAuOS4VxHRgO9JBtE1)
 
 Train a GPT-SoVITS model from your own dataset.
 
-[![Inference Notebook](https://img.shields.io/badge/Colab-Inference-F9AB00?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1p2Tk7n5xJbMPJ_i1VosgC8ACvwahPwrd)
+[![Inference Notebook](https://img.shields.io/badge/Colab-Inference-F9AB00?style=for-the-badge&logo=googlecolab)](https://colab.research.google.com/drive/1f7st-Wh7dO0XKTR-u20HzU99noibMCgg)
 
 Generate speech using your trained model.
 
